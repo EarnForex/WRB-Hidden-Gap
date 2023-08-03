@@ -4,6 +4,8 @@ WRB Hidden Gap is a custom MT4/MT5 indicator coded by EarnForex.com. The indicat
 
 It is an indispensable tool for Forex price action traders, which simplifies detection of important trading zones. It supports all types of MetaTrader alerts.
 
+This indicator is capable of working in a multi-timeframe mode (MTF), display higher timefarme information on the current chart.
+
 ![WRB Hidden Gap detects a major resistance zone on the dialy chart of the EUR/USD currency pair](https://github.com/EarnForex/WRB-Hidden-Gap/blob/main/README_Images/wrb-hidden-gap-major-resistance-eurusd.png)
 
 More information about this custom MetaTrader indicator is available here: https://www.earnforex.com/metatrader-indicators/WRB-Hidden-Gap/
