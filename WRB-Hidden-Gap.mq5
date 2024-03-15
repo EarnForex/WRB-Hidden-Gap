@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
 //|                                               WRB-Hidden-Gap.mq5 |
-//|                                      Copyright © 2023, EarnForex |
+//|                                      Copyright © 2024, EarnForex |
 //|                                       https://www.earnforex.com/ |
 //|                             Based on the indicator by Akif TOKUZ |
 //+------------------------------------------------------------------+
-#property copyright "Copyright © 2023, EarnForex"
+#property copyright "Copyright © 204, EarnForex"
 #property link      "https://www.earnforex.com/metatrader-indicators/WRB-Hidden-Gap/"
-#property version   "1.03"
+#property version   "1.04"
 
 #property description "Identifies Wide Range Bars and Hidden Gaps. Supports MTF."
 #property description "WRB and HG definitions are taken from the WRB Analysis Tutorial-1"
@@ -38,9 +38,11 @@ input color HGcolorIntersectionBearishBreached   = clrSalmon;
 input ENUM_LINE_STYLE HGstyle = STYLE_SOLID;
 input int StartCalculationFromBar = 100;
 input bool HollowBoxes = false;
-input bool AlertBreaches = true;
+input bool AlertBreachesFromBelow = true;
+input bool AlertBreachesFromAbove = true;
 input bool AlertHG = false;
 input bool AlertWRB = false;
+input bool AlertHGFill = false;
 input bool EnableNativeAlerts = false;
 input bool EnableEmailAlerts = false;
 input bool EnablePushAlerts = false;
@@ -52,13 +54,13 @@ int totalBarCount = -1;
 bool DoAlerts = false;
 datetime AlertTimeWRB = 0, AlertTimeHG = 0;
 string UnfilledPrefix, FilledPrefix;
+int counted_bars;
 
 int OnInit()
 {
     if (PeriodSeconds(Timeframe) < PeriodSeconds())
     {
-        Alert("The Timeframe input parameter should be higher or equal to the current timeframe.");
-        return INIT_FAILED;
+        Print("The Timeframe input parameter should be higher or equal to the current timeframe. Switching to current timeframe.");
     }
 
     IndicatorSetString(INDICATOR_SHORTNAME, "WRB+HG");
@@ -132,11 +134,19 @@ void checkHGFilled(int barNumber)
             if ((HGFillPA_H > box_H) && (HGFillPA_L < box_L))
             {
                 ObjectDelete(0, ObjName);
-                string ObjectText = FilledPrefix + TimeToString(startTime, TIME_DATE | TIME_MINUTES);
+                string ObjectText = FilledPrefix + TimeToString(startTime, TIME_DATE | TIME_MINUTES); // Recreate as a filled box.
                 ObjectCreate(0, ObjectText, OBJ_RECTANGLE, 0, startTime, box_H, iTime(Symbol(), Period(), barNumber), box_L);
                 ObjectSetInteger(0, ObjectText, OBJPROP_STYLE, HGstyle);
                 ObjectSetInteger(0, ObjectText, OBJPROP_COLOR, objectColor);
                 ObjectSetInteger(0, ObjectText, OBJPROP_FILL, !HollowBoxes);
+                if ((AlertHGFill) && (counted_bars > 0)) // Don't alert on old fillings.
+                {
+                    string Text = "WRB Hidden Gap: " + Symbol() + " - " + StringSubstr(EnumToString((ENUM_TIMEFRAMES)Period()), 7) + " - HG " + TimeToString(startTime, TIME_DATE | TIME_MINUTES) + " Filled.";
+                    string TextNative = "WRB Hidden Gap: HG " + TimeToString(startTime, TIME_DATE | TIME_MINUTES) + " Filled.";
+                    if (EnableNativeAlerts) Alert(TextNative);
+                    if (EnableEmailAlerts) SendMail("WRB HG Alert", Text);
+                    if (EnablePushAlerts) SendNotification(Text);
+                }
                 break;
             }
             j++;
@@ -322,13 +332,13 @@ int OnCalculate(const int rates_total,
                 const long &volume[],
                 const int &spread[])
 {
-    if ((DoAlerts) && (AlertBreaches)) CheckAlert();
+    if ((DoAlerts) && ((AlertBreachesFromBelow) || (AlertBreachesFromAbove))) CheckAlert();
 
     int end_bar = 0, wrb_alert_bar, hg_alert_bar;
     // A new bar started.
     if (totalBarCount != rates_total)
     {
-        int counted_bars = prev_calculated;
+        counted_bars = prev_calculated;
         int start_bar = 0;
         // In MTF mode, it is necessary to start from the oldest sub-bar inside the higher-timeframe bar #1 and end on the newest sub-bar of that bar.
         // If there were skipped bars or its a fresh start (via counted_bars), then it is necessary to start at Max(oldest sub-bar of bar #1, latest non-processed bar).
@@ -463,12 +473,25 @@ void CheckAlert()
         // Current price above lower border.
         if ((Ask > Low) && (Bid < High))
         {
-            string Text = "WRB Hidden Gap: " + Symbol() + " - " + StringSubstr(EnumToString((ENUM_TIMEFRAMES)Period()), 7) + " - WRB rectangle breached.";
-            string TextNative = "WRB Hidden Gap: WRB rectangle breached.";
-            if (EnableNativeAlerts) Alert(TextNative);
-            if (EnableEmailAlerts) SendMail("WRB HG Alert", Text);
-            if (EnablePushAlerts) SendNotification(Text);
-            ObjectSetString(0, ObjectText, OBJPROP_NAME, ObjectText + "A");
+            string Text = "";
+            string TextNative = "";
+            if ((AlertBreachesFromBelow) && ((iOpen(Symbol(), Period(), 0) < Low) || (iOpen(Symbol(), Period(), 1) < Low)))
+            {
+                Text = "WRB Hidden Gap: " + Symbol() + " - " + StringSubstr(EnumToString((ENUM_TIMEFRAMES)Period()), 7) + " - WRB rectangle breached from below.";
+                TextNative = "WRB Hidden Gap: WRB rectangle breached from below.";
+            }
+            else if ((AlertBreachesFromAbove) && ((iOpen(Symbol(), Period(), 0) > High) || (iOpen(Symbol(), Period(), 1) > High)))
+            {
+                Text = "WRB Hidden Gap: " + Symbol() + " - " + StringSubstr(EnumToString((ENUM_TIMEFRAMES)Period()), 7) + " - WRB rectangle breached from above.";
+                TextNative = "WRB Hidden Gap: WRB rectangle breached from above.";
+            }
+            if (Text != "")
+            {
+                if (EnableNativeAlerts) Alert(TextNative);
+                if (EnableEmailAlerts) SendMail("WRB HG Alert", Text);
+                if (EnablePushAlerts) SendNotification(Text);
+                ObjectSetString(0, ObjectText, OBJPROP_NAME, ObjectText + "A");
+            }
             return;
         }
     }

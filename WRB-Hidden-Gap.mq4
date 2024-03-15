@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
 //|                                               WRB-Hidden-Gap.mq4 |
-//|                                      Copyright © 2023, EarnForex |
+//|                                      Copyright © 2024, EarnForex |
 //|                                       https://www.earnforex.com/ |
 //|                             Based on the indicator by Akif TOKUZ |
 //+------------------------------------------------------------------+
-#property copyright "Copyright © 2023, EarnForex"
+#property copyright "Copyright © 2024, EarnForex"
 #property link      "https://www.earnforex.com/metatrader-indicators/WRB-Hidden-Gap/"
-#property version   "1.03"
+#property version   "1.04"
 #property strict
 
 #property description "Identifies Wide Range Bars and Hidden Gaps. Supports MTF."
@@ -36,9 +36,11 @@ input color HGcolorIntersectionBearishBreached   = clrSalmon;
 input ENUM_LINE_STYLE HGstyle = STYLE_SOLID;
 input int StartCalculationFromBar = 100;
 input bool HollowBoxes = false;
-input bool AlertBreaches = true;
+input bool AlertBreachesFromBelow = true;
+input bool AlertBreachesFromAbove = true;
 input bool AlertHG = false;
 input bool AlertWRB = false;
+input bool AlertHGFill = false;
 input bool EnableNativeAlerts = false;
 input bool EnableEmailAlerts = false;
 input bool EnablePushAlerts = false;
@@ -55,8 +57,7 @@ int OnInit()
 {
     if (PeriodSeconds(Timeframe) < PeriodSeconds())
     {
-        Alert("The Timeframe input parameter should be higher or equal to the current timeframe.");
-        return INIT_FAILED;
+        Alert("The Timeframe input parameter should be higher or equal to the current timeframe. Switching to current timeframe.");
     }
     
     IndicatorShortName("WRB+HG");
@@ -127,7 +128,7 @@ void checkHGFilled(int barNumber)
             if ((HGFillPA_H > box_H) && (HGFillPA_L < box_L))
             {
                 ObjectDelete(ObjName);
-                string ObjectText = FilledPrefix + TimeToString(startTime, TIME_DATE | TIME_MINUTES);
+                string ObjectText = FilledPrefix + TimeToString(startTime, TIME_DATE | TIME_MINUTES); // Recreate as a filled box.
                 ObjectCreate(ObjectText, OBJ_RECTANGLE, 0, startTime, box_H, Time[barNumber], box_L);
                 ObjectSetInteger(ChartID(), ObjectText, OBJPROP_STYLE, HGstyle);
                 // Filled HG is necessarilly a breached one.
@@ -137,6 +138,13 @@ void checkHGFilled(int barNumber)
                 else if (objectColor == HGcolorIntersectionBearishUnbreached) objectColor = HGcolorIntersectionBearishBreached;
                 ObjectSetInteger(ChartID(), ObjectText, OBJPROP_COLOR, objectColor);
                 ObjectSetInteger(ChartID(), ObjectText, OBJPROP_BACK, !HollowBoxes);
+                if ((AlertHGFill) && (IndicatorCounted() > 0)) // Don't alert on old fillings.
+                {
+                    string Text = "WRB Hidden Gap: " + Symbol() + " - " + StringSubstr(EnumToString((ENUM_TIMEFRAMES)Period()), 7) + " - HG " + TimeToString(startTime, TIME_DATE | TIME_MINUTES) + " Filled.";
+                    if (EnableNativeAlerts) Alert(Text);
+                    if (EnableEmailAlerts) SendMail("WRB HG Alert", Text);
+                    if (EnablePushAlerts) SendNotification(Text);
+                }
                 break;
             }
             j++;
@@ -362,7 +370,7 @@ int OnCalculate(const int rates_total,
                 const long &volume[],
                 const int &spread[])
 {    
-    if ((DoAlerts) && (AlertBreaches)) CheckAlert();
+    if ((DoAlerts) && ((AlertBreachesFromBelow) || (AlertBreachesFromAbove))) CheckAlert();
 
     int end_bar = 0, wrb_alert_bar, hg_alert_bar;
     // A new bar started.
@@ -499,11 +507,22 @@ void CheckAlert()
         // Current price above lower border.
         if ((Ask > bLow) && (Bid < bHigh))
         {
-            string Text = "WRB Hidden Gap: " + Symbol() + " - " + StringSubstr(EnumToString((ENUM_TIMEFRAMES)Period()), 7) + " - WRB rectangle breached.";
-            if (EnableNativeAlerts) Alert(Text);
-            if (EnableEmailAlerts) SendMail("WRB HG Alert", Text);
-            if (EnablePushAlerts) SendNotification(Text);
-            ObjectSetString(0, ObjectText, OBJPROP_NAME, ObjectText + "A");
+            string Text = "";
+            if ((AlertBreachesFromBelow) && ((iOpen(Symbol(), Period(), 0) < bLow) || (iOpen(Symbol(), Period(), 1) < bLow)))
+            {
+                Text = "WRB Hidden Gap: " + Symbol() + " - " + StringSubstr(EnumToString((ENUM_TIMEFRAMES)Period()), 7) + " - WRB rectangle breached from below.";
+            }
+            else if ((AlertBreachesFromAbove) && ((iOpen(Symbol(), Period(), 0) > bHigh) || (iOpen(Symbol(), Period(), 1) > bHigh)))
+            {
+                Text = "WRB Hidden Gap: " + Symbol() + " - " + StringSubstr(EnumToString((ENUM_TIMEFRAMES)Period()), 7) + " - WRB rectangle breached from above.";
+            }
+            if (Text != "")
+            {
+                if (EnableNativeAlerts) Alert(Text);
+                if (EnableEmailAlerts) SendMail("WRB HG Alert", Text);
+                if (EnablePushAlerts) SendNotification(Text);
+                ObjectSetString(0, ObjectText, OBJPROP_NAME, ObjectText + "A");
+            }
             return;
         }
     }
