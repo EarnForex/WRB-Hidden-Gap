@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
 //|                                               WRB-Hidden-Gap.mq4 |
-//|                                      Copyright © 2024, EarnForex |
+//|                                      Copyright © 2025, EarnForex |
 //|                                       https://www.earnforex.com/ |
 //|                             Based on the indicator by Akif TOKUZ |
 //+------------------------------------------------------------------+
-#property copyright "Copyright © 2024, EarnForex"
+#property copyright "Copyright © 2025, EarnForex"
 #property link      "https://www.earnforex.com/metatrader-indicators/WRB-Hidden-Gap/"
-#property version   "1.04"
+#property version   "1.05"
 #property strict
 
 #property description "Identifies Wide Range Bars and Hidden Gaps. Supports MTF."
@@ -21,10 +21,13 @@
 #property indicator_label1 "WRB"
 #property indicator_width1 3
 
+input string Comment1 = "===Calculation===";
 input ENUM_TIMEFRAMES Timeframe = PERIOD_CURRENT;
 input bool UseWholeBars = false;
 input int WRB_LookBackBarCount = 3;
 input int WRB_WingDingsSymbol = 115;
+input int StartCalculationFromBar = 100;
+input string Comment2 = "===Style & Color===";
 input color HGcolorNormalBullishUnbreached       = clrDodgerBlue;
 input color HGcolorIntersectionBullishUnbreached = clrBlue;
 input color HGcolorNormalBearishUnbreached       = clrIndianRed;
@@ -34,8 +37,8 @@ input color HGcolorIntersectionBullishBreached   = clrSlateBlue;
 input color HGcolorNormalBearishBreached         = clrLightCoral;
 input color HGcolorIntersectionBearishBreached   = clrSalmon;
 input ENUM_LINE_STYLE HGstyle = STYLE_SOLID;
-input int StartCalculationFromBar = 100;
 input bool HollowBoxes = false;
+input string Comment3 = "===Alerts===";
 input bool AlertBreachesFromBelow = true;
 input bool AlertBreachesFromAbove = true;
 input bool AlertHG = false;
@@ -44,6 +47,9 @@ input bool AlertHGFill = false;
 input bool EnableNativeAlerts = false;
 input bool EnableEmailAlerts = false;
 input bool EnablePushAlerts = false;
+input bool EnableSoundAlerts = false;
+input string AlertSoundFile = "alert.wav";
+input string Comment4 = "===Miscellaneous===";
 input string ObjectPrefix = "HG_";
 
 double WRB[];
@@ -140,10 +146,12 @@ void checkHGFilled(int barNumber)
                 ObjectSetInteger(ChartID(), ObjectText, OBJPROP_BACK, !HollowBoxes);
                 if ((AlertHGFill) && (IndicatorCounted() > 0)) // Don't alert on old fillings.
                 {
-                    string Text = "WRB Hidden Gap: " + Symbol() + " - " + StringSubstr(EnumToString((ENUM_TIMEFRAMES)Period()), 7) + " - HG " + TimeToString(startTime, TIME_DATE | TIME_MINUTES) + " Filled.";
+                    string rectangle_direction = GetRectangleDirection(ObjectText);
+                    string Text = "WRB Hidden Gap: " + Symbol() + " - " + StringSubstr(EnumToString((ENUM_TIMEFRAMES)Period()), 7) + " - " + rectangle_direction + " HG " + TimeToString(startTime, TIME_DATE | TIME_MINUTES) + " Filled.";
                     if (EnableNativeAlerts) Alert(Text);
                     if (EnableEmailAlerts) SendMail("WRB HG Alert", Text);
                     if (EnablePushAlerts) SendNotification(Text);
+                    if (EnableSoundAlerts) PlaySound(AlertSoundFile);
                 }
                 break;
             }
@@ -444,18 +452,25 @@ int OnCalculate(const int rates_total,
 
         if ((DoAlerts) && (AlertWRB) && (WRB[wrb_alert_bar] != EMPTY_VALUE) && (AlertTimeWRB < Time[wrb_alert_bar]))
         {
-            string Text = "WRB Hidden Gap: " + Symbol() + " - " + StringSubstr(EnumToString((ENUM_TIMEFRAMES)Period()), 7) + " - New WRB.";
+            // Check WRB's direction to include it in the alert text:
+            string direction = "Bearish ";
+            if (iOpen(Symbol(), Timeframe, 1) < iClose(Symbol(), Timeframe, 1)) direction = "Bullish ";
+            string Text = "WRB Hidden Gap: " + Symbol() + " - " + StringSubstr(EnumToString((ENUM_TIMEFRAMES)Period()), 7) + " - New " + direction + "WRB.";
             if (EnableNativeAlerts) Alert(Text);
             if (EnableEmailAlerts) SendMail("WRB HG Alert", Text);
             if (EnablePushAlerts) SendNotification(Text);
+            if (EnableSoundAlerts) PlaySound(AlertSoundFile);
             AlertTimeWRB = Time[wrb_alert_bar];
         }
         if ((DoAlerts) && (AlertHG) && (ObjectFind(ChartID(), UnfilledPrefix + TimeToString(Time[hg_alert_bar])) > -1) && (AlertTimeHG < Time[hg_alert_bar]))
         {
-            string Text = "WRB Hidden Gap: " + Symbol() + " - " + StringSubstr(EnumToString((ENUM_TIMEFRAMES)Period()), 7) + " - New HG.";
+            // Check rectangle's color to see whether it is bullish or bearish and include this info in the alert text:
+            string rectangle_direction = GetRectangleDirection(UnfilledPrefix + TimeToString(Time[hg_alert_bar]));
+            string Text = "WRB Hidden Gap: " + Symbol() + " - " + StringSubstr(EnumToString((ENUM_TIMEFRAMES)Period()), 7) + " - New " + rectangle_direction + " HG.";
             if (EnableNativeAlerts) Alert(Text);
             if (EnableEmailAlerts) SendMail("WRB HG Alert", Text);
             if (EnablePushAlerts) SendNotification(Text);
+            if (EnableSoundAlerts) PlaySound(AlertSoundFile);
             AlertTimeHG = Time[hg_alert_bar];
         }
 
@@ -510,21 +525,33 @@ void CheckAlert()
             string Text = "";
             if ((AlertBreachesFromBelow) && ((iOpen(Symbol(), Period(), 0) < bLow) || (iOpen(Symbol(), Period(), 1) < bLow)))
             {
-                Text = "WRB Hidden Gap: " + Symbol() + " - " + StringSubstr(EnumToString((ENUM_TIMEFRAMES)Period()), 7) + " - WRB rectangle breached from below.";
+                string rectangle_direction = GetRectangleDirection(ObjectText);
+                Text = "WRB Hidden Gap: " + Symbol() + " - " + StringSubstr(EnumToString((ENUM_TIMEFRAMES)Period()), 7) + " - " + rectangle_direction + " WRB rectangle breached from below.";
             }
             else if ((AlertBreachesFromAbove) && ((iOpen(Symbol(), Period(), 0) > bHigh) || (iOpen(Symbol(), Period(), 1) > bHigh)))
             {
-                Text = "WRB Hidden Gap: " + Symbol() + " - " + StringSubstr(EnumToString((ENUM_TIMEFRAMES)Period()), 7) + " - WRB rectangle breached from above.";
+                string rectangle_direction = GetRectangleDirection(ObjectText);
+                Text = "WRB Hidden Gap: " + Symbol() + " - " + StringSubstr(EnumToString((ENUM_TIMEFRAMES)Period()), 7) + " - " + rectangle_direction + " WRB rectangle breached from above.";
             }
             if (Text != "")
             {
                 if (EnableNativeAlerts) Alert(Text);
                 if (EnableEmailAlerts) SendMail("WRB HG Alert", Text);
                 if (EnablePushAlerts) SendNotification(Text);
+                if (EnableSoundAlerts) PlaySound(AlertSoundFile);
                 ObjectSetString(0, ObjectText, OBJPROP_NAME, ObjectText + "A");
             }
             return;
         }
     }
+}
+
+// Returns rectangle direction as a string ("Bullish" or "Bearish") based on its color.
+string GetRectangleDirection(const string objectName)
+{
+    color objectColor = (color)ObjectGetInteger(ChartID(), objectName, OBJPROP_COLOR);
+    if ((objectColor == HGcolorNormalBullishBreached) || (objectColor == HGcolorIntersectionBullishBreached) || (objectColor == HGcolorNormalBullishUnbreached) || (objectColor == HGcolorIntersectionBullishUnbreached)) return "Bullish";
+    else if ((objectColor == HGcolorNormalBearishBreached) || (objectColor == HGcolorIntersectionBearishBreached) || (objectColor == HGcolorNormalBearishUnbreached) || (objectColor == HGcolorIntersectionBearishUnbreached)) return "Bearish";
+    return ""; // Failed to detect direction based on color.
 }
 //+------------------------------------------------------------------+
