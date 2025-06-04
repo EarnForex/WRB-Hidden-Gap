@@ -8,6 +8,6 @@ This indicator is capable of working in a multi-timeframe mode (MTF), display hi
 
 ![WRB Hidden Gap detects a major resistance zone on the dialy chart of the EUR/USD currency pair](https://github.com/EarnForex/WRB-Hidden-Gap/blob/main/README_Images/wrb-hidden-gap-major-resistance-eurusd.png)
 
-More information about this custom MetaTrader indicator is available here: https://www.earnforex.com/metatrader-indicators/WRB-Hidden-Gap/
+More information about this custom MetaTrader indicator is available here: https://www.earnforex.com/indicators/WRB-Hidden-Gap/
 
 Any contributions to the code are welcome!
